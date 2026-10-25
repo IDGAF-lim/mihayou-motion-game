@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>咪哈友 · 连接测试台</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/lucide.js" defer></script>
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header>
+    <div class="brand"><span class="brand-mark">M</span><div><strong>咪哈友</strong><span>连接测试台</span></div></div>
+    <div class="header-actions"><span id="connection" class="status">连接中</span><button id="new-run"><i data-lucide="rotate-cw"></i>新测试</button><button id="export"><i data-lucide="download"></i>导出记录</button></div>
+  </header>
+  <main>
+    <section class="connection-band">
+      <div class="section-title"><h1>设备连接</h1><span id="run-id" class="muted"></span></div>
+      <div class="connection-grid">
+        <div>
+          <label for="address">电脑局域网地址</label>
+          <select id="address"></select>
+          <label for="post-url">咪哈友增强版手机 App 地址</label>
+          <div class="copy-field"><input id="post-url" readonly><button id="copy-post" title="复制体感 App 地址" aria-label="复制体感 App 地址"><i data-lucide="copy"></i></button></div>
+        </div>
+        <div>
+          <label for="probe-url">备用通信测试工具地址</label>
+          <div class="copy-field"><input id="probe-url" readonly><button id="copy-probe" title="复制电脑地址" aria-label="复制电脑地址"><i data-lucide="copy"></i></button></div>
+          <div class="downloads"><a href="/game/"><i data-lucide="play"></i>打开游戏</a><a href="/apps/sensor-integrated.apk"><i data-lucide="smartphone"></i>下载增强版手机 App</a><a href="/apps/sensor.apk"><i data-lucide="archive"></i>备用：原版 APK</a></div>
+          <p id="device-state" class="muted">等待手机连接</p>
+        </div>
+      </div>
+    </section>
+    <section class="metrics" aria-label="测试指标">
+      <div><span>手机往返 RTT 中位数</span><strong id="rtt">—</strong><small id="sample-count">等待手机测量</small></div>
+      <div><span>往返 RTT P95</span><strong id="p95">—</strong><small>较慢的 5% 样本位于此值以上</small></div>
+      <div><span>估算动作上行中位数</span><strong id="uplink">—</strong><small id="uplink-note">需要同一 App 提供同步时间戳</small></div>
+      <div><span>已接收 / 已转发</span><strong id="counts">0 / 0</strong><small id="counts-note">等待动作</small></div>
+    </section>
+    <section class="monitor-grid">
+      <div class="plot-section">
+        <div class="section-title"><h2>手机往返时间</h2><span class="legend"><b></b>RTT / ms</span></div>
+        <canvas id="chart" aria-label="最近 60 个手机往返延迟样本"></canvas>
+      </div>
+      <div class="action-section">
+        <div class="section-title"><h2>最近动作</h2><span id="action-source" class="muted">—</span></div>
+        <div class="action-feedback"><i id="action-icon" data-lucide="radio"></i><strong id="last-action">等待输入</strong><span id="last-sequence">—</span></div>
+        <div class="action-totals"><span>上挥 <b id="up-count">0</b></span><span>下挥 <b id="down-count">0</b></span></div>
+      </div>
+    </section>
+    <section class="calibration">
+      <div class="section-title"><h2>判定校准</h2><a href="/game/">八拍自动校准</a><span id="calibration-state" class="muted">未播放</span></div>
+      <div class="calibration-grid">
+        <div><label for="offset">判定偏移 <b id="offset-label">0 ms</b></label><input type="range" id="offset" min="-200" max="400" step="5" value="0"><div class="range-labels"><span>−200 ms</span><span>+400 ms</span></div></div>
+        <div class="calibration-controls"><button id="minus" title="减少 5 毫秒" aria-label="减少 5 毫秒"><i data-lucide="minus"></i></button><button id="reset-offset" title="恢复默认偏移" aria-label="恢复默认偏移"><i data-lucide="rotate-ccw"></i></button><button id="plus" title="增加 5 毫秒" aria-label="增加 5 毫秒"><i data-lucide="plus"></i></button><button id="beat"><i data-lucide="play"></i>节拍测试</button></div>
+      </div>
+      <div class="calibration-result"><span id="timing-result">等待校准动作</span><span class="muted">正值向前补偿；与网络 RTT 分开记录</span></div>
+    </section>
+    <section class="log-section">
+      <div class="section-title"><h2>动作记录</h2><div class="log-actions"><label class="checkbox"><input type="checkbox" id="only-valid">仅显示已转发</label><a href="/api/export.csv"><i data-lucide="file-spreadsheet"></i>CSV</a></div></div>
+      <div class="table-scroll"><table><thead><tr><th>电脑时间</th><th>序号</th><th>动作</th><th>来源</th><th>估算上行</th><th>状态</th></tr></thead><tbody id="events"><tr class="empty"><td colspan="6">尚未收到动作</td></tr></tbody></table></div>
+      <div class="log-footer"><span id="gaps">序号跳号 0 · 重复 0 · 过期 0</span><span>跳号包含本地丢弃等原因，不直接等于丢包</span></div>
+    </section>
+    <p id="notice" role="status"></p>
+  </main>
+</body>
+</html>

@@ -1,0 +1,7 @@
+{
+  "name": "mihayou-link",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Mihayou local phone relay and timing diagnostics",
+  "scripts": { "start": "node server.js", "test": "node --test test/*.test.js", "test:browser": "node --test test/browser.test.cjs", "test:sensor": "node --test test/sensor.test.cjs" }
+}

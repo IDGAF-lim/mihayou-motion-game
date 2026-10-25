@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>咪哈友 · Funny Pigs</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="/lucide.js" defer></script>
+</head>
+<body>
+<header><strong>咪哈友 <small>Funny Pigs</small></strong><a href="/" title="打开设备连接与测试台"><i data-lucide="smartphone"></i>设备连接</a><span id="connection">正在连接</span></header>
+<main>
+  <div class="track-line"><div><p class="eyebrow">FUNNY PIGS · 30 s</p><h1>音乐避障</h1></div><span id="phone-status">等待 MihaSensor</span></div>
+  <section class="setup" aria-label="对局设置">
+    <div class="controls">
+      <fieldset id="mode-options"><legend>模式</legend><label><input type="radio" name="mode" value="single" checked>单人</label><label><input type="radio" name="mode" value="versus">双人轮流</label></fieldset>
+      <label for="difficulty">难度</label><select id="difficulty"><option value="easy">简单</option><option value="normal" selected>普通</option><option value="hard">困难</option></select>
+      <span id="difficulty-detail"></span>
+    </div>
+    <div id="player-names" class="controls" hidden><label>玩家 1 <input id="name-1" maxlength="16" value="玩家 1"></label><label>玩家 2 <input id="name-2" maxlength="16" value="玩家 2"></label></div>
+  </section>
+  <div class="controls play-controls">
+    <button id="start" class="primary" disabled><i data-lucide="play"></i><span>加载中</span></button>
+    <button id="next-player" class="primary" hidden><i data-lucide="arrow-right"></i><span>交给玩家 2</span></button>
+    <button id="pause" disabled><i data-lucide="pause"></i><span>暂停</span></button>
+    <button id="stop" disabled title="结束本局，成绩作废"><i data-lucide="square"></i>结束</button>
+    <button id="ready"><i data-lucide="rotate-ccw"></i>重新准备</button>
+  </div>
+  <section class="calibration" aria-label="判定校准">
+    <div class="controls"><strong>判定校准</strong><button id="practice"><i data-lucide="volume-2"></i>试听节拍</button><button id="auto-calibrate"><i data-lucide="audio-lines"></i>自动校准 8 拍</button><button id="cancel-calibration" hidden><i data-lucide="square"></i>停止校准</button></div>
+    <div class="controls offset-controls"><label for="offset-slider">判定偏移</label><input id="offset-slider" type="range" min="-200" max="400" step="5" value="0" aria-label="判定偏移滑条"><label><input id="offset" type="number" min="-200" max="400" step="5" value="0" aria-label="判定偏移毫秒"> ms</label></div>
+    <div class="calibration-status"><span id="offset-status" role="status">偏移 0 ms</span><span id="calibration-status" role="status">尚未校准</span></div>
+  </section>
+  <div class="stats"><span id="phase">准备</span><span id="current-player">玩家 1</span><span id="timer">0.00 / 30.00 s</span><span id="score">通过 0</span></div>
+  <canvas id="stage" width="1000" height="360" aria-label="音乐避障游戏"></canvas>
+  <p id="feedback" role="status">准备就绪</p>
+  <section id="results" aria-label="成绩" hidden><h2 id="verdict"></h2><div class="table-scroll"><table><thead><tr><th>玩家</th><th>通过障碍</th><th>存活时间</th><th>结果</th></tr></thead><tbody id="result-rows"></tbody></table></div><button id="export-score"><i data-lucide="download"></i>导出成绩</button></section>
+  <details><summary>联调</summary><p>通信局号：<code id="session">尚未连接</code></p><div class="controls"><button data-action="swing_up" title="模拟上挥"><i data-lucide="arrow-up"></i>上挥</button><button data-action="swing_down" title="模拟下挥"><i data-lucide="arrow-down"></i>下挥</button></div><pre id="log"></pre></details>
+</main>
+<footer><span id="chart-footer"></span><a href="/apps/sensor-integrated.apk">下载增强版手机 App</a></footer>
+<script src="/game-link.js"></script><script src="demo-chart.js"></script><script src="game.js"></script><script src="calibration.js"></script><script src="match.js"></script><script src="app.js"></script>
+</body>
+</html>
