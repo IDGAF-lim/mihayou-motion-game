@@ -26,6 +26,7 @@ td,th{padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap}t
 details{margin-top:20px;border-top:1px solid var(--line);padding-top:12px}summary{cursor:pointer;color:var(--muted)}
 pre{max-height:160px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--muted);font-size:12px}
 code{overflow-wrap:anywhere}footer{display:flex;justify-content:space-between;gap:12px;font-size:12px;color:var(--muted)}
-button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent)}
+.keyboard-controls{display:flex;gap:8px}.keyboard-controls button{width:44px;height:44px;padding:0;flex:none}
+button:focus-visible,input:focus-visible,select:focus-visible,canvas:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 [hidden]{display:none!important}
 @media(max-width:600px){header,main,footer{padding:14px 16px}header{gap:12px;flex-wrap:wrap}header strong{font-size:22px}header small{display:none}header a{font-size:13px}#connection{flex-basis:100%;text-align:left}.track-line{align-items:flex-start}#phone-status{max-width:145px;text-align:right}.controls{gap:9px}.controls label{font-size:13px}#offset-slider{flex-basis:calc(100% - 150px)}#player-names input{width:115px}button{font-size:13px}.calibration-status{gap:5px 12px}.stats{font-size:12px}footer{flex-wrap:wrap}h1{font-size:27px}}

@@ -1,7 +1,7 @@
 (()=>{
 'use strict';
 const $=id=>document.getElementById(id),canvas=$('stage'),ctx=canvas.getContext('2d');
-let audioContext,buffer,source,origin=0,held=0,seq=0,generation=0,audioReady=false,audioDuration=30000,audioName='funny-pigs.mp3',currentRunId=null,phoneConnected=false,calibration=null;
+let audioContext,buffer,source,origin=0,held=0,seq=0,generation=0,audioReady=false,audioDuration=30000,audioName='funny-pigs.mp3',currentRunId=null,serverConnected=false,calibration=null;
 let match=null,recordedRound=false,hadSensor=false,latestOffset=null;
 const icons=()=>window.lucide?.createIcons();
 function buttonLabel(id,text){const button=$(id);const label=button.querySelector('span');if(label)label.textContent=text;else button.textContent=text;}
@@ -49,6 +49,7 @@ async function start(){
   halt();held=0;seq=0;recordedRound=false;
   core.offset=match.mode==='versus'?match.offsetMs:core.offset;
   playAt(0);core.start(currentRunId);
+  canvas.focus({preventScroll:true});
   showResults();
   $('feedback').textContent=match.currentName+' · 开始';
  }catch(e){halt();log(e.message);$('feedback').textContent=e.message;}
@@ -85,7 +86,8 @@ core.subscribe(s=>{
  $('offset').disabled=$('offset-slider').disabled=s.phase!=='ready'||calibration?.mode==='auto'||competitionLocked;
  $('auto-calibrate').disabled=$('practice').disabled=!audioReady||s.phase!=='ready'||!!calibration||competitionLocked;
  $('cancel-calibration').hidden=!calibration;
- $('start').disabled=!audioReady||!currentRunId||!phoneConnected||!!calibration||['playing','paused'].includes(s.phase);
+ $('start').disabled=!audioReady||!currentRunId||!serverConnected||!!calibration||['playing','paused'].includes(s.phase);
+ for(const button of document.querySelectorAll('[data-game-action]'))button.disabled=s.phase!=='playing'&&!calibration;
  buttonLabel('start',s.phase==='ended'?(s.ending?.validScore?'再来一局':'重试本局'):match&&!match.complete?'开始 '+match.currentName:'开始');
  $('pause').disabled=!['playing','paused'].includes(s.phase);buttonLabel('pause',s.phase==='paused'?'继续':'暂停');$('stop').disabled=!['playing','paused'].includes(s.phase);
  if(s.ending){
@@ -106,7 +108,7 @@ function draw(s){ctx.clearRect(0,0,1000,360);ctx.fillStyle='#35453b';for(let x=0
  ctx.fillStyle='#173021';ctx.fillRect(185,a==='jump'?178:a==='crouch'?260:228,5,5);
  ctx.fillStyle='#e9edf7';ctx.fillText({idle:'等待',jump:'跳跃',crouch:'蹲伏',dead:'碰撞'}[a],158,330);
 }
-$('start').onclick=start;$('pause').onclick=async()=>{if(core.phase==='playing'){core.pause();held=core.time;halt();}else if(core.phase==='paused'){const ticket=++generation;await audioContext.resume();if(ticket!==generation||core.phase!=='paused')return;playAt(held);core.resume();}};
+$('start').onclick=start;$('pause').onclick=async()=>{if(core.phase==='playing'){core.pause();held=core.time;halt();}else if(core.phase==='paused'){const ticket=++generation;await audioContext.resume();if(ticket!==generation||core.phase!=='paused')return;playAt(held);core.resume();canvas.focus({preventScroll:true});}};
 $('stop').onclick=()=>{generation++;core.interrupt('手动结束');};
 $('ready').onclick=()=>{generation++;stopCalibration();halt();match=null;recordedRound=false;showResults();if(latestOffset!==null){core.offset=latestOffset;showOffset(latestOffset);}core.loadChart(MihayouMatch.chartFor(window.DEMO_CHART,$('difficulty').value));$('feedback').textContent='准备就绪';};
 $('next-player').onclick=()=>{generation++;halt();core.ready();core.setCalibration(match.offsetMs);showOffset(match.offsetMs);$('feedback').textContent='请把手机交给 '+match.currentName;};
@@ -216,14 +218,26 @@ $('export-score').onclick=()=>{
  $('practice').onclick=()=>startCalibration('practice');
  $('cancel-calibration').onclick=()=>stopCalibration();
 for(const b of document.querySelectorAll('[data-action]'))b.onclick=()=>local(b.dataset.action,'simulator');
-document.addEventListener('keydown',e=>{if(e.repeat||/INPUT|TEXTAREA|SUMMARY/.test(e.target.tagName))return;const action={ArrowUp:'swing_up',' ':'swing_up',ArrowDown:'swing_down'}[e.key];if(action){e.preventDefault();local(action);}});
+for(const button of document.querySelectorAll('[data-game-action]'))button.onclick=()=>{
+ local(button.dataset.gameAction,'simulator');canvas.focus({preventScroll:true});
+};
+document.addEventListener('keydown',e=>{
+ if(e.defaultPrevented||e.isComposing||e.ctrlKey||e.altKey||e.metaKey)return;
+ const editing=e.composedPath().some(node=>node instanceof Element&&
+  (node.matches('input,textarea,select,summary')||node.isContentEditable));
+ if(editing)return;
+ const action={ArrowUp:'swing_up',' ':'swing_up',ArrowDown:'swing_down'}[e.key];
+ if(!action||(!calibration&&core.phase!=='playing'))return;
+ e.preventDefault();
+ if(!e.repeat)local(action);
+});
 document.addEventListener('visibilitychange',()=>{if(document.hidden){stopCalibration('页面已隐藏，校准停止');if(core.phase==='playing'){$('pause').click();log('页面隐藏，自动暂停');}}});
  window.addEventListener('mihayou-link:session',e=>{const next=e.detail?.runId;if(!next)return;const changed=currentRunId&&currentRunId!==next;currentRunId=next;if(changed)stopCalibration('通信测试局已切换，校准停止');if(changed&&['playing','paused'].includes(core.phase)){generation++;halt();core.interrupt('通信测试局已切换，请重新开始');}else if(core.phase==='ready')core.emit();$('session').textContent=next;});
  window.addEventListener('mihayou-link:offset',e=>{const value=Number(e.detail?.offsetMs);if(!Number.isInteger(value)||pendingOffset!==null)return;latestOffset=value;localStorage.setItem('mihayou.offset',value);if(match?.mode==='versus'&&!match.complete){showOffset(match.offsetMs);if(value!==match.offsetMs)$('offset-status').textContent+=' · 新设置下一组生效';return;}showOffset(value);if(core.phase==='ready'){try{core.setCalibration(value);}catch{}}else{core.offset=value;$('offset-status').textContent+=' · 下一局生效';}});
- window.addEventListener('mihayou-link:connection',e=>{phoneConnected=!!e.detail?.connected;$('connection').textContent=phoneConnected?'通信已连接 · 等待手机动作':'通信断开 · 正在重连';if(!phoneConnected){stopCalibration('通信断开，校准停止');if(['playing','paused'].includes(core.phase))core.interrupt('通信连接断开');}core.emit();});
+ window.addEventListener('mihayou-link:connection',e=>{serverConnected=!!e.detail?.connected;$('connection').textContent=serverConnected?'电脑服务已连接':'通信断开 · 正在重连';if(!serverConnected){stopCalibration('通信断开，校准停止');if(['playing','paused'].includes(core.phase))core.interrupt('通信连接断开');}core.emit();});
 window.addEventListener('mihayou-link:phone-state',e=>{
  const sensors=e.detail?.sensorConnections||[],online=e.detail?.clients?.some(c=>c.online);
- $('phone-status').textContent=sensors.length?'MihaSensor 已连接':online?'备用控制器已连接':'等待 MihaSensor';
+ $('phone-status').textContent=sensors.length?'MihaSensor 已连接':online?'备用控制器已连接':'键盘可用';
  if(hadSensor&&!sensors.length){
   stopCalibration('手机连接断开，校准停止');
   if(['playing','paused'].includes(core.phase))core.interrupt('手机连接断开');

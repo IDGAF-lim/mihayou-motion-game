@@ -1,0 +1,83 @@
+'use strict';
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const { createApp } = require('../server');
+
+test('keyboard-only play passes both obstacle types, suppresses repeats and preserves form editing', { timeout: 20000 }, async t => {
+  const app = createApp(), address = await app.listen();
+  let browser;
+  t.after(async () => { await browser?.close(); await app.close(); });
+  browser = await chromium.launch({ headless: true,
+    ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {}) });
+  const page = await browser.newPage({ viewport: { width: 1280, height: 1000 } });
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto(`http://127.0.0.1:${address.port}/game/`);
+  await page.waitForFunction(() => !document.getElementById('start').disabled);
+  assert.equal(app.state().sensorConnections.length, 0);
+  assert.equal(app.state().clients.length, 0);
+  await page.locator('#start').click();
+  await page.waitForFunction(() => document.activeElement.id === 'stage');
+  await page.waitForFunction(() => window.Mihayou.getState().musicTimeMs >= 810, null, { polling: 5 });
+  await page.keyboard.down('ArrowDown');
+  await page.waitForFunction(() => window.Mihayou.getState().passedCount === 1);
+  assert.equal(await page.evaluate(() => window.Mihayou.getState().character.action), 'crouch');
+  const firstLog = await page.locator('#log').textContent();
+  const scroll = await page.evaluate(() => scrollY);
+  await page.keyboard.down('ArrowDown');
+  assert.equal(await page.locator('#log').textContent(), firstLog);
+  assert.equal(await page.evaluate(() => scrollY), scroll);
+  await page.keyboard.up('ArrowDown');
+  await page.waitForFunction(() => {
+    const s = window.Mihayou.getState(), obstacle = s.obstacles.find(o => o.status === 'pending');
+    return s.musicTimeMs >= obstacle.hitTimeMs;
+  }, null, { polling: 5 });
+  const nextType = await page.evaluate(() => window.Mihayou.getState().obstacles.find(o => o.status === 'pending').type);
+  assert.equal(nextType, 'ground');
+  await page.keyboard.press('ArrowUp');
+  await page.waitForFunction(() => window.Mihayou.getState().passedCount === 2);
+  assert.equal(await page.evaluate(() => window.Mihayou.getState().character.action), 'jump');
+
+  await page.locator('#pause').click();
+  const pausedLog = await page.locator('#log').textContent();
+  await page.keyboard.press('ArrowDown');
+  assert.equal(await page.locator('#log').textContent(), pausedLog);
+  await page.locator('#pause').click();
+  await page.waitForFunction(() => document.activeElement.id === 'stage');
+  await page.keyboard.press('Space');
+  assert.equal(await page.evaluate(() => window.Mihayou.getState().character.action), 'jump');
+  await page.locator('[data-game-action="swing_down"]').click();
+  assert.equal(await page.evaluate(() => window.Mihayou.getState().character.action), 'crouch');
+  assert.equal(await page.evaluate(() => document.activeElement.id), 'stage');
+  await page.locator('#stop').click();
+  await page.locator('#ready').click();
+
+  await page.locator('#offset').fill('0');
+  await page.locator('#offset').focus();
+  await page.keyboard.press('ArrowUp');
+  assert.equal(await page.locator('#offset').inputValue(), '5');
+  await page.locator('#difficulty').focus();
+  await page.keyboard.press('ArrowDown');
+  assert.equal(await page.locator('#difficulty').inputValue(), 'hard');
+  const inputLog = await page.locator('#log').textContent();
+  await page.evaluate(() => {
+    const editor = document.createElement('div');
+    editor.contentEditable = 'true'; editor.id = 'test-editor'; document.body.append(editor); editor.focus();
+  });
+  await page.keyboard.press('ArrowDown');
+  assert.equal(await page.locator('#log').textContent(), inputLog);
+  await page.locator('#test-editor').evaluate(element => element.remove());
+  await page.setViewportSize({ width: 320, height: 740 });
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+  const out = process.env.TEST_ARTIFACTS_DIR || path.resolve(__dirname, '../test-artifacts');
+  fs.mkdirSync(out, { recursive: true });
+  await page.screenshot({ path: path.join(out, 'keyboard-mobile.png'), fullPage: true });
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await page.screenshot({ path: path.join(out, 'keyboard-desktop.png'), fullPage: true });
+  const pixels = await page.locator('#stage').evaluate(canvas => canvas.getContext('2d').getImageData(175, 220, 1, 1).data[3]);
+  assert.ok(pixels > 0);
+  assert.deepEqual(errors, []);
+});

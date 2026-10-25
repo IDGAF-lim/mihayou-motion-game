@@ -25,6 +25,10 @@
     <button id="pause" disabled><i data-lucide="pause"></i><span>暂停</span></button>
     <button id="stop" disabled title="结束本局，成绩作废"><i data-lucide="square"></i>结束</button>
     <button id="ready"><i data-lucide="rotate-ccw"></i>重新准备</button>
+    <div class="keyboard-controls" role="group" aria-label="键盘控制">
+      <button data-game-action="swing_up" title="跳跃（↑ / 空格）" aria-label="跳跃（上方向键或空格）" disabled><i data-lucide="arrow-up"></i></button>
+      <button data-game-action="swing_down" title="下蹲（↓）" aria-label="下蹲（下方向键）" disabled><i data-lucide="arrow-down"></i></button>
+    </div>
   </div>
   <section class="calibration" aria-label="判定校准">
     <div class="controls"><strong>判定校准</strong><button id="practice"><i data-lucide="volume-2"></i>试听节拍</button><button id="auto-calibrate"><i data-lucide="audio-lines"></i>自动校准 8 拍</button><button id="cancel-calibration" hidden><i data-lucide="square"></i>停止校准</button></div>
@@ -32,7 +36,7 @@
     <div class="calibration-status"><span id="offset-status" role="status">偏移 0 ms</span><span id="calibration-status" role="status">尚未校准</span></div>
   </section>
   <div class="stats"><span id="phase">准备</span><span id="current-player">玩家 1</span><span id="timer">0.00 / 30.00 s</span><span id="score">通过 0</span></div>
-  <canvas id="stage" width="1000" height="360" aria-label="音乐避障游戏"></canvas>
+  <canvas id="stage" width="1000" height="360" tabindex="0" aria-label="音乐避障游戏"></canvas>
   <p id="feedback" role="status">准备就绪</p>
   <section id="results" aria-label="成绩" hidden><h2 id="verdict"></h2><div class="table-scroll"><table><thead><tr><th>玩家</th><th>通过障碍</th><th>存活时间</th><th>结果</th></tr></thead><tbody id="result-rows"></tbody></table></div><button id="export-score"><i data-lucide="download"></i>导出成绩</button></section>
   <details><summary>联调</summary><p>通信局号：<code id="session">尚未连接</code></p><div class="controls"><button data-action="swing_up" title="模拟上挥"><i data-lucide="arrow-up"></i>上挥</button><button data-action="swing_down" title="模拟下挥"><i data-lucide="arrow-down"></i>下挥</button></div><pre id="log"></pre></details>
