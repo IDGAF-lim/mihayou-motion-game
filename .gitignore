@@ -1,0 +1,15 @@
+/runtime/
+/android/build/
+/android-sensor/build/
+/node_modules/
+/test-artifacts/
+*.jks
+*.keystore
+*.pem
+*.key
+*.idsig
+*.log
+.env
+.env.*
+.DS_Store
+Thumbs.db
