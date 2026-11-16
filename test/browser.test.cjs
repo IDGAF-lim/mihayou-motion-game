@@ -143,8 +143,14 @@ test('auto calibration schedules eight real beeps and accepts timestamped phone 
   const offset = Number(await page.locator('#offset').inputValue());
   assert.ok(offset >= 85 && offset <= 115, `unexpected offset: ${offset}`);
   assert.equal(await page.locator('#start').isDisabled(), false);
-  await page.waitForFunction(async () => (await (await fetch('/api/export')).json()).calibration.length === 7);
-  const data = await (await fetch(base + '/api/export')).json();
+  // Calibration samples are independent requests; observe the completed server snapshot.
+  let data;
+  const deadline = Date.now() + 5000;
+  do {
+    data = await (await fetch(base + '/api/export')).json();
+    if (data.calibration.length === 7) break;
+    await new Promise(resolve => setTimeout(resolve, 50));
+  } while (Date.now() < deadline);
   assert.equal(data.calibration.length, 7);
   assert.ok(Math.abs(data.offsetMs - 100) <= 15);
   await screenshot(page, 'game-auto-calibrated.png');

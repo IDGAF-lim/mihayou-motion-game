@@ -256,7 +256,7 @@ function createApp(options = {}) {
         const mime = {
           '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
           '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8',
-          '.txt': 'text/plain; charset=utf-8', '.mp3': 'audio/mpeg', '.wav': 'audio/wav'
+          '.txt': 'text/plain; charset=utf-8', '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.png': 'image/png'
         }[path.extname(target).toLowerCase()] || 'application/octet-stream';
         res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': 'no-store' });
         return fs.createReadStream(target).pipe(res);

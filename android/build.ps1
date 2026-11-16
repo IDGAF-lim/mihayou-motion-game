@@ -54,6 +54,7 @@ Check-Step
 $unsigned = Join-Path $build 'unsigned.apk'
 & (Join-Path $BuildTools 'aapt2.exe') link -o $unsigned --manifest (Join-Path $ProjectRoot 'AndroidManifest.xml') -I $AndroidJar
 Check-Step
+Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $archive = [IO.Compression.ZipFile]::Open($unsigned, [IO.Compression.ZipArchiveMode]::Update)
 try {

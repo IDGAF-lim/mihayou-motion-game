@@ -35,12 +35,14 @@ test('enhanced phone transport synchronizes, sends and drops expired actions usi
   const java = path.join(javaHome, 'bin', process.platform === 'win32' ? 'java.exe' : 'java');
   const classes = mkdtempSync(path.join(tmpdir(), 'mihayou-native-'));
   t.after(() => rmSync(classes, { recursive: true, force: true }));
-  const sources = javaFiles(path.join(root, 'android-sensor/src')).filter(file => !file.endsWith('MainActivity.java'));
+  const sources = javaFiles(path.join(root, 'android-sensor/src')).filter(file =>
+    !file.endsWith('MainActivity.java') && !file.endsWith('BleSensorPeripheral.java'));
   sources.push(...javaFiles(path.join(root, 'android-sensor/test')),
     path.join(root, 'android/src/com/mihayou/linktest/SwingDetector.java'),
     ...javaFiles(path.join(root, 'android/test')));
   await execute(javac, ['-encoding', 'UTF-8', '-cp', jsonJar, '-d', classes, ...sources]);
   const classpath = [classes, jsonJar].join(path.delimiter);
+  console.log((await execute(java, ['-cp', classpath, 'com.mihayou.sensor.SensorPacketTest'])).trim());
   const detector = await execute(java, ['-cp', classpath, 'com.mihayou.linktest.SwingDetectorTest']);
   assert.match(detector, /23 checks passed/);
   const app = createApp();

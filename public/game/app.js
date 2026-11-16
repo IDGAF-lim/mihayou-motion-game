@@ -1,11 +1,11 @@
 (()=>{
 'use strict';
-const $=id=>document.getElementById(id),canvas=$('stage'),ctx=canvas.getContext('2d');
+const $=id=>document.getElementById(id),canvas=$('stage'),scene=new MihayouCatScene.Scene(canvas);
 let audioContext,buffer,source,origin=0,held=0,seq=0,generation=0,audioReady=false,audioDuration=30000,audioName='funny-pigs.mp3',currentRunId=null,serverConnected=false,calibration=null;
-let match=null,recordedRound=false,hadSensor=false,latestOffset=null,bleConnection=null;
-const bleDetector=new MihayouBleSensor.Detector(
- action=>handleIncoming({...action,sessionId:core.sessionId}),
- state=>{$('ble-status').textContent=state;}
+let match=null,recordedRound=false,hadSensor=false,latestOffset=null,bleConnection=null,bleRequired=false,bleSession=null,bleConnecting=false;
+const bleMotion=new MihayouBleSensor.MotionInput(
+ action=>{if(bleConnection&&!bleConnection.closed)handleIncoming({...action,phoneSessionId:bleSession,sessionId:core.sessionId});},
+ state=>{$('ble-status').textContent=state;core.emit();}
 );
 const icons=()=>window.lucide?.createIcons();
 function buttonLabel(id,text){const button=$(id);const label=button.querySelector('span');if(label)label.textContent=text;else button.textContent=text;}
@@ -39,7 +39,9 @@ async function start(){
  const ticket=++generation;
  try{
   if(!audioReady)throw Error('音频尚未加载');
+  if(!scene.loaded)throw Error(scene.error||'猫猫素材尚未加载');
   if(!currentRunId)throw Error('通信尚未连接，请先等待电脑服务在线');
+  if(bleRequired&&(!bleConnection||bleConnection.closed||!bleMotion.ready))throw Error('请先连接手机蓝牙并完成动作校准');
   await audioContext.resume();
   if(ticket!==generation)return;
   if(!match||match.complete){
@@ -52,7 +54,7 @@ async function start(){
   if(audioName!==core.chart.audio)throw Error('音频与谱面不匹配：'+core.chart.audio);
   halt();held=0;seq=0;recordedRound=false;
   core.offset=match.mode==='versus'?match.offsetMs:core.offset;
-  playAt(0);core.start(currentRunId);
+  bleMotion.resetMotion();playAt(0);core.start(currentRunId);
   canvas.focus({preventScroll:true});
   showResults();
   $('feedback').textContent=match.currentName+' · 开始';
@@ -88,9 +90,13 @@ core.subscribe(s=>{
  const setupLocked=['playing','paused'].includes(s.phase)||!!competitionLocked;
  $('mode-options').disabled=$('difficulty').disabled=$('name-1').disabled=$('name-2').disabled=setupLocked;
  $('offset').disabled=$('offset-slider').disabled=s.phase!=='ready'||calibration?.mode==='auto'||competitionLocked;
- $('auto-calibrate').disabled=$('practice').disabled=!audioReady||s.phase!=='ready'||!!calibration||competitionLocked;
+ const bleUnavailable=bleRequired&&(!bleConnection||bleConnection.closed||!bleMotion.ready);
+ $('auto-calibrate').disabled=$('practice').disabled=!audioReady||s.phase!=='ready'||!!calibration||competitionLocked||bleUnavailable;
  $('cancel-calibration').hidden=!calibration;
- $('start').disabled=!audioReady||!currentRunId||!serverConnected||!!calibration||['playing','paused'].includes(s.phase);
+ $('start').disabled=!audioReady||!scene.loaded||!currentRunId||!serverConnected||!!calibration||['playing','paused'].includes(s.phase)||bleUnavailable;
+ $('ble-connect').disabled=bleConnecting||(!bleConnection&&['playing','paused'].includes(s.phase))||!!calibration;
+ $('ble-calibrate').disabled=!bleConnection||bleConnection.closed||['playing','paused'].includes(s.phase)||!!calibration;
+ $('ble-keyboard').hidden=!bleRequired;
  for(const button of document.querySelectorAll('[data-game-action]'))button.disabled=s.phase!=='playing'&&!calibration;
  buttonLabel('start',s.phase==='ended'?(s.ending?.validScore?'再来一局':'重试本局'):match&&!match.complete?'开始 '+match.currentName:'开始');
  $('pause').disabled=!['playing','paused'].includes(s.phase);buttonLabel('pause',s.phase==='paused'?'继续':'暂停');$('stop').disabled=!['playing','paused'].includes(s.phase);
@@ -103,19 +109,12 @@ core.subscribe(s=>{
  $('next-player').hidden=!next;$('start').hidden=!!next;
  if(next)buttonLabel('next-player','交给 '+match.currentName);
  $('current-player').textContent=next?'下一位：'+match.currentName:match?match.currentName:'玩家 1';
- draw(s);
+ scene.setState(s,MihayouMatch.levels[match?.difficulty||$('difficulty').value].speed);
 });
-function draw(s){ctx.clearRect(0,0,1000,360);ctx.fillStyle='#35453b';for(let x=0;x<1000;x+=50)ctx.fillRect(x,0,1,360);ctx.fillStyle='#7a9383';ctx.fillRect(0,285,1000,2);ctx.setLineDash([6,6]);ctx.strokeStyle='#b4ff79';ctx.beginPath();ctx.moveTo(180,30);ctx.lineTo(180,300);ctx.stroke();ctx.setLineDash([]);ctx.font='15px sans-serif';ctx.fillStyle='#b4ff79';ctx.fillText('判定线',153,24);
- const speed=MihayouMatch.levels[match?.difficulty||$('difficulty').value].speed;
- for(const o of s.obstacles){const x=180+(o.hitTimeMs-s.musicTimeMs)*speed;if(x< -60||x>1060)continue;ctx.fillStyle=o.status==='passed'?'#587962':o.status==='missed'?'#f36f76':o.type==='ground'?'#f4bf7d':'#b1b6fa';const y=o.type==='ground'?235:140;ctx.fillRect(x-20,y,40,o.type==='ground'?50:65);ctx.fillText(o.type==='ground'?'↑ 跳':'↓ 蹲',x-24,y-12);}
- const a=s.character.action;ctx.fillStyle=a==='dead'?'#f36f76':'#b4ff79';ctx.fillRect(158,a==='jump'?165:a==='crouch'?255:215,44,a==='crouch'?30:70);
- ctx.fillStyle='#173021';ctx.fillRect(185,a==='jump'?178:a==='crouch'?260:228,5,5);
- ctx.fillStyle='#e9edf7';ctx.fillText({idle:'等待',jump:'跳跃',crouch:'蹲伏',dead:'碰撞'}[a],158,330);
-}
-$('start').onclick=start;$('pause').onclick=async()=>{if(core.phase==='playing'){core.pause();held=core.time;halt();}else if(core.phase==='paused'){const ticket=++generation;await audioContext.resume();if(ticket!==generation||core.phase!=='paused')return;playAt(held);core.resume();canvas.focus({preventScroll:true});}};
+$('start').onclick=start;$('pause').onclick=async()=>{bleMotion.resetMotion();if(core.phase==='playing'){core.pause();held=core.time;halt();}else if(core.phase==='paused'){const ticket=++generation;await audioContext.resume();if(ticket!==generation||core.phase!=='paused')return;playAt(held);core.resume();canvas.focus({preventScroll:true});}};
 $('stop').onclick=()=>{generation++;core.interrupt('手动结束');};
 $('ready').onclick=()=>{generation++;stopCalibration();halt();match=null;recordedRound=false;showResults();if(latestOffset!==null){core.offset=latestOffset;showOffset(latestOffset);}core.loadChart(MihayouMatch.chartFor(window.DEMO_CHART,$('difficulty').value));$('feedback').textContent='准备就绪';};
-$('next-player').onclick=()=>{generation++;halt();core.ready();core.setCalibration(match.offsetMs);showOffset(match.offsetMs);$('feedback').textContent='请把手机交给 '+match.currentName;};
+$('next-player').onclick=()=>{generation++;halt();if(bleRequired){bleMotion.reset();$('ble-status').textContent='交接手机后请重新校准动作';}core.ready();core.setCalibration(match.offsetMs);showOffset(match.offsetMs);$('feedback').textContent='请把手机交给 '+match.currentName;};
 $('difficulty').onchange=()=>{match=null;showResults();refreshSetup();core.loadChart(MihayouMatch.chartFor(window.DEMO_CHART,$('difficulty').value));};
 for(const radio of document.querySelectorAll('input[name="mode"]'))radio.onchange=()=>{match=null;showResults();refreshSetup();};
 $('export-score').onclick=()=>{
@@ -182,6 +181,8 @@ $('export-score').onclick=()=>{
  }
  async function startCalibration(mode){
   if(calibration||core.phase!=='ready'||!audioReady)return;
+  if(bleRequired&&(!bleConnection||bleConnection.closed||!bleMotion.ready))return;
+  bleMotion.resetMotion();
   const owner={mode,actions:[],expected:[],seen:new Set(),oscillators:new Set(),startedAt:performance.now()};
   calibration=owner;core.emit();
   try{
@@ -222,20 +223,36 @@ $('export-score').onclick=()=>{
  $('practice').onclick=()=>startCalibration('practice');
  $('cancel-calibration').onclick=()=>stopCalibration();
 $('ble-connect').onclick=async()=>{
+ if(bleConnecting)return;
+ if(bleConnection){bleConnection.close('已主动断开，请重连或使用键盘');return;}
+ bleRequired=true;bleConnecting=true;bleMotion.reset();bleSession=crypto.randomUUID();
+ $('ble-status').textContent='正在选择并连接手机';$('phone-status').textContent='蓝牙连接中';core.emit();
+ const owner=new MihayouBleSensor.Connection(packet=>{
+  if(bleConnection!==owner)return;
+  if(packet.kind===1)$('phone-status').textContent='手机原始数据接收中';
+  bleMotion.sample(packet);
+ },reason=>{
+  if(bleConnection!==owner)return;
+  bleConnection=null;bleMotion.reset();generation++;
+  stopCalibration('蓝牙连接中断，校准停止');
+  if(['playing','paused'].includes(core.phase)){halt();core.interrupt(reason);}
+  $('ble-status').textContent=reason;$('phone-status').textContent='手机未连接';
+  buttonLabel('ble-connect','连接手机蓝牙');core.emit();
+ });
+ bleConnection=owner;
  try{
-  bleConnection=await MihayouBleSensor.connect((x,y,z,sensorTime)=>{
-   const receivedAtMs=performance.now();
-   bleDetector.sample(x,y,z,receivedAtMs);
-  });
-  $('ble-connect').disabled=true;
-  $('ble-status').textContent='蓝牙已连接 · 电脑接收传感器';
-  $('ble-calibrate').disabled=false;
-  bleConnection.device.addEventListener('gattserverdisconnected',()=>{
-   bleConnection=null;$('ble-connect').disabled=false;$('ble-status').textContent='蓝牙已断开';$('ble-calibrate').disabled=true;
-  });
- }catch(error){$('ble-status').textContent=error.message;log(error.message);}
+  await owner.connect();
+  if(bleConnection!==owner)return;
+  buttonLabel('ble-connect','断开蓝牙');
+  $('ble-status').textContent='蓝牙已订阅 · 请校准动作';
+ }catch(error){owner.close(error.message);log(error.message);}
+ finally{bleConnecting=false;core.emit();}
 };
-$('ble-calibrate').onclick=()=>bleDetector.calibrate();
+$('ble-calibrate').onclick=()=>{if(bleConnection&&!['playing','paused'].includes(core.phase)&&!calibration)bleMotion.calibrate();core.emit();};
+$('ble-keyboard').onclick=()=>{
+ bleConnection?.close('已切换键盘');bleRequired=false;bleMotion.reset();hadSensor=false;
+ $('ble-status').textContent='键盘模式';$('phone-status').textContent='键盘可用';core.emit();
+};
 for(const b of document.querySelectorAll('[data-action]'))b.onclick=()=>local(b.dataset.action,'simulator');
 for(const button of document.querySelectorAll('[data-game-action]'))button.onclick=()=>{
  local(button.dataset.gameAction,'simulator');canvas.focus({preventScroll:true});
@@ -255,6 +272,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden){stopCalibr
  window.addEventListener('mihayou-link:offset',e=>{const value=Number(e.detail?.offsetMs);if(!Number.isInteger(value)||pendingOffset!==null)return;latestOffset=value;localStorage.setItem('mihayou.offset',value);if(match?.mode==='versus'&&!match.complete){showOffset(match.offsetMs);if(value!==match.offsetMs)$('offset-status').textContent+=' · 新设置下一组生效';return;}showOffset(value);if(core.phase==='ready'){try{core.setCalibration(value);}catch{}}else{core.offset=value;$('offset-status').textContent+=' · 下一局生效';}});
  window.addEventListener('mihayou-link:connection',e=>{serverConnected=!!e.detail?.connected;$('connection').textContent=serverConnected?'电脑服务已连接':'通信断开 · 正在重连';if(!serverConnected){stopCalibration('通信断开，校准停止');if(['playing','paused'].includes(core.phase))core.interrupt('通信连接断开');}core.emit();});
 window.addEventListener('mihayou-link:phone-state',e=>{
+ if(bleRequired)return;
  const sensors=e.detail?.sensorConnections||[],online=e.detail?.clients?.some(c=>c.online);
  $('phone-status').textContent=sensors.length?'MihaSensor 已连接':online?'备用控制器已连接':'键盘可用';
  if(hadSensor&&!sensors.length){
@@ -266,7 +284,10 @@ window.addEventListener('mihayou-link:phone-state',e=>{
 window.Mihayou=Object.freeze({receiveAction:handleIncoming,getState:()=>core.getState(),subscribe:fn=>core.subscribe(fn),start,restart:start,setCalibration:ms=>{$('offset').value=ms;return applyOffset();},loadChart:c=>core.loadChart(c),ready:()=>{$('ready').click();},interrupt:reason=>{stopCalibration();core.interrupt(reason);}});
  refreshSetup();core.loadChart(MihayouMatch.chartFor(window.DEMO_CHART,$('difficulty').value));try{const n=Number(localStorage.getItem('mihayou.offset')||0);core.setCalibration(n);showOffset(core.offset);}catch{}
  fetch('funny-pigs.mp3').then(r=>{if(!r.ok)throw Error('funny pigs 音轨读取失败');return r.arrayBuffer();}).then(b=>decode(b,'funny-pigs.mp3')).then(()=>{core.emit();log('funny pigs 普通谱面已就绪');}).catch(e=>{log(e.message);$('start').textContent='音轨加载失败';$('feedback').textContent='请通过电脑服务的 /game/ 页面打开，不要直接双击 HTML。';});
- MihayouLink.connect(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/ws`,{allowLegacy:true,onAction:handleIncoming});
-function frame(){core.tick();requestAnimationFrame(frame);}requestAnimationFrame(frame);
+ MihayouLink.connect(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/ws`,{allowLegacy:true,onAction:action=>{if(!bleRequired)handleIncoming(action);}});
+ scene.load().then(()=>{core.emit();log('0.6.0 猫猫素材已就绪');}).catch(error=>{
+  scene.error=error.message;log(error.message);$('feedback').textContent=error.message+'，请刷新页面重试';core.emit();
+ });
+function frame(now){core.tick();scene.render(now);requestAnimationFrame(frame);}requestAnimationFrame(frame);
 window.addEventListener('DOMContentLoaded',icons);
 })();
