@@ -11,6 +11,11 @@
 <header><strong>咪哈友 <small>Funny Pigs</small></strong><a href="/" title="打开设备连接与测试台"><i data-lucide="smartphone"></i>设备连接</a><span id="connection">正在连接</span></header>
 <main>
   <div class="track-line"><div><p class="eyebrow">FUNNY PIGS · 30 s</p><h1>音乐避障</h1></div><span id="phone-status">等待 MihaSensor</span></div>
+  <section class="ble-panel" aria-label="蓝牙传感器">
+    <button id="ble-connect"><i data-lucide="bluetooth"></i>连接手机蓝牙</button>
+    <button id="ble-calibrate" disabled>校准上挥方向</button>
+    <span id="ble-status" role="status">未连接</span>
+  </section>
   <section class="setup" aria-label="对局设置">
     <div class="controls">
       <fieldset id="mode-options"><legend>模式</legend><label><input type="radio" name="mode" value="single" checked>单人</label><label><input type="radio" name="mode" value="versus">双人轮流</label></fieldset>
@@ -42,6 +47,6 @@
   <details><summary>联调</summary><p>通信局号：<code id="session">尚未连接</code></p><div class="controls"><button data-action="swing_up" title="模拟上挥"><i data-lucide="arrow-up"></i>上挥</button><button data-action="swing_down" title="模拟下挥"><i data-lucide="arrow-down"></i>下挥</button></div><pre id="log"></pre></details>
 </main>
 <footer><span id="chart-footer"></span><a href="/apps/sensor-integrated.apk">下载增强版手机 App</a></footer>
-<script src="/game-link.js"></script><script src="demo-chart.js"></script><script src="game.js"></script><script src="calibration.js"></script><script src="match.js"></script><script src="app.js"></script>
+<script src="/game-link.js"></script><script src="demo-chart.js"></script><script src="game.js"></script><script src="calibration.js"></script><script src="match.js"></script><script src="ble-sensor.js"></script><script src="app.js"></script>
 </body>
 </html>

@@ -2,7 +2,11 @@
 'use strict';
 const $=id=>document.getElementById(id),canvas=$('stage'),ctx=canvas.getContext('2d');
 let audioContext,buffer,source,origin=0,held=0,seq=0,generation=0,audioReady=false,audioDuration=30000,audioName='funny-pigs.mp3',currentRunId=null,serverConnected=false,calibration=null;
-let match=null,recordedRound=false,hadSensor=false,latestOffset=null;
+let match=null,recordedRound=false,hadSensor=false,latestOffset=null,bleConnection=null;
+const bleDetector=new MihayouBleSensor.Detector(
+ action=>handleIncoming({...action,sessionId:core.sessionId}),
+ state=>{$('ble-status').textContent=state;}
+);
 const icons=()=>window.lucide?.createIcons();
 function buttonLabel(id,text){const button=$(id);const label=button.querySelector('span');if(label)label.textContent=text;else button.textContent=text;}
 function selectedMode(){return document.querySelector('input[name="mode"]:checked').value;}
@@ -217,6 +221,21 @@ $('export-score').onclick=()=>{
  $('auto-calibrate').onclick=()=>startCalibration('auto');
  $('practice').onclick=()=>startCalibration('practice');
  $('cancel-calibration').onclick=()=>stopCalibration();
+$('ble-connect').onclick=async()=>{
+ try{
+  bleConnection=await MihayouBleSensor.connect((x,y,z,sensorTime)=>{
+   const receivedAtMs=performance.now();
+   bleDetector.sample(x,y,z,receivedAtMs);
+  });
+  $('ble-connect').disabled=true;
+  $('ble-status').textContent='蓝牙已连接 · 电脑接收传感器';
+  $('ble-calibrate').disabled=false;
+  bleConnection.device.addEventListener('gattserverdisconnected',()=>{
+   bleConnection=null;$('ble-connect').disabled=false;$('ble-status').textContent='蓝牙已断开';$('ble-calibrate').disabled=true;
+  });
+ }catch(error){$('ble-status').textContent=error.message;log(error.message);}
+};
+$('ble-calibrate').onclick=()=>bleDetector.calibrate();
 for(const b of document.querySelectorAll('[data-action]'))b.onclick=()=>local(b.dataset.action,'simulator');
 for(const button of document.querySelectorAll('[data-game-action]'))button.onclick=()=>{
  local(button.dataset.gameAction,'simulator');canvas.focus({preventScroll:true});

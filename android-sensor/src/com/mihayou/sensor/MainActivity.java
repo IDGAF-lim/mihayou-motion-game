@@ -2,17 +2,13 @@ package com.mihayou.sensor;
 
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.content.res.ColorStateList;
 import android.graphics.Color;
-import android.graphics.drawable.GradientDrawable;
 import android.hardware.*;
 import android.os.*;
 import android.view.WindowManager;
 import android.widget.*;
-import com.mihayou.linktest.SwingDetector;
 import java.util.Arrays;
 import java.util.Locale;
-import java.util.UUID;
 
 // Keeps the supplied APK's screen structure and pose-compensated sensor pipeline.
 public class MainActivity extends Activity implements SensorEventListener {
@@ -23,18 +19,11 @@ public class MainActivity extends Activity implements SensorEventListener {
         previous = new float[3], gravity = new float[3], gyro = new float[3], filtered = new float[3];
     private SensorManager sensors;
     private Sensor accelerometer, orientation, gyroscope;
-    private SensorLink link;
-    private SwingDetector detector;
-    private boolean running, calibrating, initialized, haveRotation, usePose, rearming, foreground;
-    private long stableSince, ignoreUntil, lastUi, sequence;
-    private String sessionId = UUID.randomUUID().toString(), detectorState = "未校准";
-    private int upCount, downCount;
-    private EditText endpoint;
-    private TextView status, readings, recent, counts, network, rtt, thresholdLabel, logView;
-    private Button start, stop, recalibrate, rearm;
-    private CheckBox send;
-    private SeekBar threshold;
-    private final java.util.ArrayDeque<String> logs = new java.util.ArrayDeque<>();
+    private BleSensorPeripheral ble;
+    private boolean running, calibrating, initialized, haveRotation, usePose;
+    private long stableSince, ignoreUntil, lastUi;
+    private TextView status, readings;
+    private Button start, stop, recalibrate;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -44,49 +33,6 @@ public class MainActivity extends Activity implements SensorEventListener {
         if (orientation == null) orientation = sensors.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
         gyroscope = sensors.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
         buildUi();
-        detector = new SwingDetector(new SwingDetector.Listener() {
-            public void onState(String value) {
-                detectorState = value;
-                if (!calibrating) status.setText("状态：" + value);
-                if (value.contains("校准完成")) updateThreshold();
-            }
-            public void onAction(String action, double sourceTime, double peak) {
-                long number = ++sequence;
-                if ("swing_up".equals(action)) upCount++; else downCount++;
-                recent.setText("最近动作：" + ("swing_up".equals(action) ? "上挥（跳跃）" : "下挥（下蹲）"));
-                counts.setText("上挥 " + upCount + "    下挥 " + downCount);
-                logs.addFirst("#" + number + "  " + action + "  " + String.format(Locale.US, "%.1f m/s²", peak));
-                while (logs.size() > 5) logs.removeLast();
-                StringBuilder text = new StringBuilder();
-                for (String row : logs) text.append(row).append('\n');
-                logView.setText(text.toString().trim());
-                if (send.isChecked()) link.send(sessionId, number, action, sourceTime, false);
-            }
-        });
-        String clientId = getPreferences(0).getString("clientId", "");
-        if (clientId.isEmpty()) {
-            clientId = UUID.randomUUID().toString();
-            getPreferences(0).edit().putString("clientId", clientId).apply();
-        }
-        link = new SensorLink(clientId, Build.MANUFACTURER + " " + Build.MODEL + " · 原版增强",
-            () -> SystemClock.elapsedRealtimeNanos() / 1_000_000.0, new SensorLink.Listener() {
-                public void state(boolean ready, String message, double value) {
-                    ui.post(() -> {
-                        if (!foreground) return;
-                        network.setText("连接状态：" + message);
-                        network.setTextColor(ready ? ACCENT : FG);
-                        rtt.setText(Double.isFinite(value) ? String.format(Locale.US, "手机往返 RTT  %.1f ms", value) : "手机往返 RTT  —");
-                    });
-                }
-                public void action(String message) { ui.post(() -> { if (foreground) network.setText(message); }); }
-            });
-        threshold.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            public void onProgressChanged(SeekBar bar, int value, boolean fromUser) {
-                if (fromUser) { detector.setThreshold(2 + value * .2); updateThresholdLabel(); }
-            }
-            public void onStartTrackingTouch(SeekBar bar) {}
-            public void onStopTrackingTouch(SeekBar bar) {}
-        });
     }
     private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }
     private TextView label(String value, int size) {
@@ -104,54 +50,23 @@ public class MainActivity extends Activity implements SensorEventListener {
         LinearLayout content = new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL);
         content.setPadding(dp(20), dp(32), dp(20), dp(28)); scroll.addView(content);
         TextView title = label("咪哈友 · 挥动控制器", 26); title.setTextColor(ACCENT); content.addView(title);
-        content.addView(label("原版增强 0.5.0", 14));
-        status = label("状态：未开始", 17); content.addView(status);
-        readings = label("加速度：等待传感器", 14); readings.setMinLines(3); content.addView(readings);
-        recent = label("最近动作：无", 24); content.addView(recent);
-        counts = label("上挥 0    下挥 0", 16); content.addView(counts);
-        start = button("开始检测并示教"); content.addView(start);
-        recalibrate = button("重新示教上挥方向"); content.addView(recalibrate);
-        stop = button("停止检测"); content.addView(stop);
-        rearm = button("已回位，重新就绪"); content.addView(rearm);
-        start.setEnabled(accelerometer != null); recalibrate.setEnabled(false); stop.setEnabled(false); rearm.setEnabled(false);
+        content.addView(label("蓝牙传感器终端 0.6.0", 14));
+        status = label("状态：等待连接电脑", 17); content.addView(status);
+        readings = label("传感器：等待启动", 14); readings.setMinLines(3); content.addView(readings);
+        content.addView(label("动作识别由电脑完成", 20));
+        content.addView(label("手机只采集并发送加速度数据", 16));
+        start = button("启动传感器"); content.addView(start);
+        recalibrate = button("重新校准手机握姿"); content.addView(recalibrate);
+        stop = button("停止采集"); content.addView(stop);
+        start.setEnabled(accelerometer != null); recalibrate.setEnabled(false); stop.setEnabled(false);
         start.setOnClickListener(view -> begin()); recalibrate.setOnClickListener(view -> beginCalibration());
         stop.setOnClickListener(view -> halt());
-        rearm.setOnClickListener(view -> {
-            if (!running || !detector.isCalibrated()) return;
-            rearming = true; stableSince = 0; status.setText("状态：保持静止，正在重新就绪");
-        });
-        thresholdLabel = label("动作阈值 3.2 m/s²", 14); content.addView(thresholdLabel);
-        threshold = new SeekBar(this); threshold.setMax(30); threshold.setProgress(6); content.addView(threshold);
-        content.addView(label("电脑连接", 18));
-        endpoint = new EditText(this); endpoint.setSingleLine(true);
-        endpoint.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
-        endpoint.setTextSize(17); endpoint.setTextColor(FG); endpoint.setHintTextColor(Color.LTGRAY);
-        endpoint.setHint("ws://电脑IP:端口/sensor"); endpoint.setText(getPreferences(0).getString("endpoint", ""));
-        GradientDrawable surface = new GradientDrawable(); surface.setColor(Color.rgb(30, 42, 55));
-        surface.setCornerRadius(dp(6)); surface.setStroke(dp(1), Color.rgb(104, 125, 145));
-        endpoint.setBackground(surface); endpoint.setPadding(dp(12), dp(12), dp(12), dp(12)); content.addView(endpoint);
-        LinearLayout buttons = new LinearLayout(this);
-        Button connect = button("连接并测量"), disconnect = button("断开");
-        buttons.addView(connect, new LinearLayout.LayoutParams(0, dp(52), 1));
-        buttons.addView(disconnect, new LinearLayout.LayoutParams(0, dp(52), 1)); content.addView(buttons);
-        connect.setOnClickListener(view -> {
-            try {
-                String address = endpoint.getText().toString().trim();
-                if (address.startsWith("http://")) address = "ws://" + address.substring(7);
-                if (!address.contains("://")) address = "ws://" + address;
-                link.connect(address); getPreferences(0).edit().putString("endpoint", address).apply();
-                getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-            } catch (Exception error) { network.setText(error.getMessage()); }
-        });
-        disconnect.setOnClickListener(view -> { link.disconnect(); network.setText("已断开"); rtt.setText("手机往返 RTT  —"); });
-        send = new CheckBox(this); send.setText("识别后发送给电脑"); send.setTextColor(FG); send.setChecked(true);
-        send.setButtonTintList(ColorStateList.valueOf(ACCENT)); content.addView(send);
-        network = label("连接状态：未连接", 14); content.addView(network);
-        rtt = label("手机往返 RTT  —", 21); rtt.setTextColor(ACCENT); content.addView(rtt);
-        content.addView(label("动作日志", 16)); logView = label("暂无动作", 13); logView.setMinLines(5); content.addView(logView);
+        Button bluetooth = button("启动电脑蓝牙传感器");
+        content.addView(bluetooth);
+        bluetooth.setOnClickListener(view -> startBle());
         Button help = button("帮助"); content.addView(help);
-        help.setOnClickListener(view -> new AlertDialog.Builder(this).setTitle("动作示教")
-            .setMessage("先拿稳约1秒，再朝你想定义为上挥的方向明显挥一次。末端停稳，缓慢反向回位并停稳，完成示教。反方向正式挥动为下挥。每次动作后都完成末端暂停、回位和停稳。电脑准备页可调判定偏移或做八拍校准。")
+        help.setOnClickListener(view -> new AlertDialog.Builder(this).setTitle("蓝牙体感连接")
+            .setMessage("在手机点“启动电脑蓝牙传感器”，允许蓝牙权限并保持 App 前台。电脑打开游戏页后点“连接手机蓝牙”，选择 MihaYou 传感器。动作方向在电脑游戏页校准；电脑完成识别和游戏判定。")
             .setPositiveButton("关闭", null).show());
         setContentView(scroll);
         if (Build.VERSION.SDK_INT >= 30) content.setOnApplyWindowInsetsListener((view, insets) -> {
@@ -159,12 +74,6 @@ public class MainActivity extends Activity implements SensorEventListener {
             view.setPadding(dp(20) + bars.left, dp(12) + bars.top, dp(20) + bars.right, dp(20) + bars.bottom);
             return insets;
         });
-    }
-    private void updateThresholdLabel() {
-        thresholdLabel.setText(String.format(Locale.US, "动作阈值 %.1f m/s²", detector.getThreshold()));
-    }
-    private void updateThreshold() {
-        threshold.setProgress((int) Math.round((detector.getThreshold() - 2) / .2)); updateThresholdLabel();
     }
     private void begin() {
         if (accelerometer == null) return;
@@ -175,19 +84,17 @@ public class MainActivity extends Activity implements SensorEventListener {
     private void beginCalibration() {
         if (!running) return;
         sensors.unregisterListener(this);
-        sessionId = UUID.randomUUID().toString(); sequence = 0;
-        calibrating = true; rearming = false; initialized = false; haveRotation = false; stableSince = 0;
+        calibrating = true; initialized = false; haveRotation = false; stableSince = 0;
         Arrays.fill(gyro, 0);
         usePose = orientation != null && sensors.registerListener(this, orientation, 20000);
         if (gyroscope != null) sensors.registerListener(this, gyroscope, 20000);
         if (!sensors.registerListener(this, accelerometer, 20000)) { halt(); status.setText("无法启动传感器"); return; }
-        detector.beginCalibration(); rearm.setEnabled(true);
         status.setText("状态：保持握姿静止约1秒");
     }
     private void halt() {
-        running = false; calibrating = false; rearming = false;
+        running = false; calibrating = false;
         sensors.unregisterListener(this); start.setEnabled(accelerometer != null);
-        stop.setEnabled(false); recalibrate.setEnabled(false); rearm.setEnabled(false);
+        stop.setEnabled(false); recalibrate.setEnabled(false);
         status.setText("状态：已停止");
     }
     @Override public void onSensorChanged(SensorEvent event) {
@@ -213,7 +120,7 @@ public class MainActivity extends Activity implements SensorEventListener {
                 if (usePose) System.arraycopy(rotation, 0, reference, 0, 9);
                 System.arraycopy(event.values, 0, gravity, 0, 3);
                 ignoreUntil = now + 180_000_000L; calibrating = false;
-                status.setText("状态：请示范一次上挥，然后停稳、回位");
+                status.setText("状态：传感器已校准，电脑端可校准动作方向");
             }
             return;
         }
@@ -223,31 +130,39 @@ public class MainActivity extends Activity implements SensorEventListener {
             filtered[i] = event.values[i] - gravity[i];
         }
         if (now <= ignoreUntil) return;
-        if (rearming) {
-            double magnitude = Math.sqrt(filtered[0] * filtered[0] + filtered[1] * filtered[1] + filtered[2] * filtered[2]);
-            if (magnitude > 1.8) stableSince = 0;
-            else {
-                if (stableSince == 0) stableSince = now;
-                if (now - stableSince >= 350_000_000L) { rearming = false; detector.resetForStart(); detector.announceReady(); }
-            }
-            return;
-        }
-        detector.accept(filtered[0], filtered[1], filtered[2], now);
+        if (ble != null) ble.publish(filtered[0], filtered[1], filtered[2], now);
         if (now - lastUi >= 100_000_000L) {
             lastUi = now;
-            double[] axis = detector.copyAxis();
-            readings.setText(String.format(Locale.US, "轴向加速度 %+.2f m/s²\n%s\n%s",
-                filtered[0] * axis[0] + filtered[1] * axis[1] + filtered[2] * axis[2],
-                usePose ? "原版握姿补偿" : "原版重力滤波", detectorState));
+            readings.setText(String.format(Locale.US, "原始加速度 %+.2f / %+.2f / %+.2f m/s²\n%s\n电脑端负责动作识别",
+                filtered[0], filtered[1], filtered[2], usePose ? "姿态补偿已启用" : "重力滤波已启用"));
         }
     }
     @Override public void onAccuracyChanged(Sensor sensor, int accuracy) {}
-    @Override protected void onResume() { super.onResume(); foreground = true; }
     @Override protected void onPause() {
-        foreground = false; halt(); if (link != null) link.disconnect();
+        halt();
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        network.setText("已暂停，回到前台后重新连接"); rtt.setText("手机往返 RTT  —");
         super.onPause();
     }
-    @Override protected void onDestroy() { if (link != null) link.close(); sensors.unregisterListener(this); super.onDestroy(); }
+    @Override protected void onDestroy() { if (ble != null) ble.close(); sensors.unregisterListener(this); super.onDestroy(); }
+    private static final int BLE_PERMISSION_REQUEST = 41;
+    private void startBle() {
+        if (Build.VERSION.SDK_INT >= 31 &&
+            (checkSelfPermission(android.Manifest.permission.BLUETOOTH_ADVERTISE) != android.content.pm.PackageManager.PERMISSION_GRANTED ||
+             checkSelfPermission(android.Manifest.permission.BLUETOOTH_CONNECT) != android.content.pm.PackageManager.PERMISSION_GRANTED)) {
+            requestPermissions(new String[] { android.Manifest.permission.BLUETOOTH_ADVERTISE,
+                android.Manifest.permission.BLUETOOTH_CONNECT }, BLE_PERMISSION_REQUEST);
+            return;
+        }
+        if (ble != null) ble.close();
+        ble = new BleSensorPeripheral(this, message -> ui.post(() -> status.setText("状态：蓝牙 " + message)));
+        if (ble.start()) {
+            if (!running) begin();
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        }
+    }
+    @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
+        super.onRequestPermissionsResult(requestCode, permissions, results);
+        if (requestCode == BLE_PERMISSION_REQUEST && results.length > 0 &&
+            results[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) startBle();
+    }
 }

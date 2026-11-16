@@ -1,6 +1,10 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.mihayou.sensor.integrated" android:versionCode="1" android:versionName="0.5.0-integration">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.mihayou.sensor.integrated" android:versionCode="1" android:versionName="0.6.0-ble">
   <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="35"/>
   <uses-permission android:name="android.permission.INTERNET"/>
+  <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30"/>
+  <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30"/>
+  <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE"/>
+  <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
   <uses-feature android:name="android.hardware.sensor.accelerometer" android:required="false"/>
   <uses-feature android:name="android.hardware.sensor.gyroscope" android:required="false"/>
   <application android:label="咪哈友·原版增强" android:theme="@android:style/Theme.Material.NoActionBar" android:usesCleartextTraffic="true" android:allowBackup="false">
